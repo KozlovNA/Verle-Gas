@@ -59,10 +59,10 @@ class Init
 {
 public:
 
-    Init(double dt, int npart, double temp) : _npart(npart), _x(npart), _v(npart), _xm(npart), _temp(temp), _dt(dt)
+    Init(int npart, double delta_x, double dt, double temp) : _npart(npart), _x(npart), _v(npart), _xm(npart), _temp(temp), _dt(dt)
     {
         _sumv2 = 0;
-        Lattice<20> lat(0.1);
+        Lattice<20> lat(delta_x);
         for(int i = 0; i < _npart; i++)
         {
             _x[i] = lat.lat_pos();
@@ -118,6 +118,57 @@ protected:
     double _dt;
 };
 
+
+class Force
+{
+public:
+    Force(int npart, double delta_x, double rc): _npart(npart), _rc(rc), _f(npart), _box(npart*delta_x) 
+    {
+        _rc2 = rc*rc;
+        _en = 0;
+        _ecut = 4*(1/pow(_rc2, 6)-1/pow(_rc2, 3));
+    }
+    void calculate_f(vector<array<double, 3>>* x)
+    {
+        for(int i = 0; i < _npart-1; i++)
+        {
+            for(int j = i+1; j < _npart; j++)
+            {
+                array<double, 3> xr;
+                for (int k = 0; k < 3; k++)
+                {
+                   xr[k] = x->at(i)[k]-x->at(j)[k];
+                   xr[k] = xr[k] - _box*round(xr[k]/_box); 
+                }
+                double r2 = xr[0]*xr[0] + xr[1]*xr[1] + xr[2]*xr[2];
+                if (r2 < _rc2)
+                {
+                    double r2i = 1/r2;
+                    double r6i = r2i*r2i*r2i;
+                    double ff = 48*r2i*r6i*(r6i-0.5);
+                    for (int k = 0; k < 3; k++)
+                    {
+                        _f[i][k] = _f[i][k] + ff*xr[k];
+                        _f[j][k] = _f[j][k] - ff*xr[k];
+                        _en = _en + 4*r6i*(r6i - 1) - _ecut;
+                    } 
+                } 
+            }
+        }
+    }
+    vector<array<double, 3>>* get_f()
+    {
+        return &_f;
+    }
+protected:
+    double _en;
+    int _npart;
+    vector<array<double, 3>> _f;
+    double _box;
+    double _rc;
+    double _rc2;
+    double _ecut;     
+};
 //void integrate();
 //void sample();
 //void force();
@@ -125,10 +176,21 @@ protected:
 
 int main()
 {   
-    Init init(0.01, 10, 3);
+    int npart = 10;
+    double dt = 0.01;
+    double dx = 1;
+    Init init(npart, dx, dt, 2);
     vector<array<double, 3>> x = init.get_x();
     vector<array<double, 3>> xm = init.get_xm();
     vector<array<double, 3>> v = init.get_v();
+    Force force(npart, dx, 6*dx);
+    force.calculate_f(&x);
+    for (int i = 0; i < npart; i++)
+    {
+        vector<array<double, 3>>* f = force.get_f();
+        cout << f->at(i)[0] << " " << f->at(i)[1] << " " << f->at(i)[2] << "\n";
+    }
+
  
     /*
     double t = 0;
