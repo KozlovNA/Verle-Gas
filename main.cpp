@@ -90,17 +90,17 @@ public:
         }
     }
     
-    vector<array<double, 3>> get_x() const
+    vector<array<double, 3>>* get_x()
     {
-        return _x;
+        return &_x;
     }
-    vector<array<double, 3>> get_xm() const
+    vector<array<double, 3>>* get_xm()
     {
-        return _xm;
+        return &_xm;
     }
-    vector<array<double, 3>> get_v() const
+    vector<array<double, 3>>* get_v()
     {
-        return _v;
+        return &_v;
     }
     int get_npart() const
     {
@@ -160,6 +160,10 @@ public:
     {
         return &_f;
     }
+    double get_en()
+    {
+        return _en;
+    }
 protected:
     double _en;
     int _npart;
@@ -169,9 +173,44 @@ protected:
     double _rc2;
     double _ecut;     
 };
+
+class Integrate_Verle{
+public:
+    Integrate_Verle(int npart, double dt): _sumv2(0), _npart(npart), _dt(dt), _temp(0)
+    {
+    }
+
+    void integrate(vector<array<double, 3>>* f, vector<array<double, 3>>* x, vector<array<double, 3>>* xm, double en)
+    {   
+        _sumv2 = 0;
+        for (int i = 0; i < _npart; i++)
+        {   
+            vector<array<double, 3>> v(_npart);
+            double xx;
+            for(int j = 0; j < 3; j++)
+            {
+                xx = 2*(x->at(i)[j]) - xm->at(i)[j] + _dt*_dt*f->at(i)[j];
+                v[i][j] = (xx - xm->at(i)[j])/(2*_dt);
+                _sumv[j] = _sumv[j] + v[i][j];
+                _sumv2 = _sumv2 + v[i][j]*v[i][j];
+                xm->at(i)[j] = x->at(i)[j];
+                x->at(i)[j] = xx;
+            }    
+        }
+        _temp = _sumv2/(3*_npart);
+        _etot = (en + 0.5*_sumv2)/_npart;
+    }
+protected:
+    array<double, 3> _sumv{};
+    double _sumv2;
+    int _npart;
+    double _dt;
+    double _temp;
+    double _etot;
+};
 //void integrate();
 //void sample();
-//void force();
+
 
 
 int main()
@@ -180,18 +219,30 @@ int main()
     double dt = 0.01;
     double dx = 1;
     Init init(npart, dx, dt, 2);
-    vector<array<double, 3>> x = init.get_x();
-    vector<array<double, 3>> xm = init.get_xm();
-    vector<array<double, 3>> v = init.get_v();
+    for (int i = 0; i < npart; i++)
+    {
+        vector<array<double, 3>>* x = init.get_x();
+        cout << x->at(i)[0] << " " << x->at(i)[1] << " " << x->at(i)[2] << "\n";
+    }
+    cout << "\n\n\n";
     Force force(npart, dx, 6*dx);
-    force.calculate_f(&x);
+    force.calculate_f(init.get_x());
     for (int i = 0; i < npart; i++)
     {
         vector<array<double, 3>>* f = force.get_f();
         cout << f->at(i)[0] << " " << f->at(i)[1] << " " << f->at(i)[2] << "\n";
     }
+    cout << "\n\n\n";
+    Integrate_Verle verle(npart, dt);
+    verle.integrate(force.get_f(), init.get_x(), init.get_xm(), force.get_en());
+    for (int i = 0; i < npart; i++)
+    {
+        vector<array<double, 3>>* x = init.get_x();
+        cout << x->at(i)[0] << " " << x->at(i)[1] << " " << x->at(i)[2] << "\n";
+    }
+    cout << "\n\n\n";
 
- 
+    
     /*
     double t = 0;
     double t_max = 1;
