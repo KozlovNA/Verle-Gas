@@ -3,6 +3,8 @@
 #include <vector>
 #include <random>
 #include <cmath>
+#include <fstream>
+#include <string>
 using namespace std;
 
 
@@ -55,6 +57,7 @@ protected:
 };
 
 
+template<int N>
 class Init
 {
 public:
@@ -62,7 +65,7 @@ public:
     Init(int npart, double delta_x, double dt, double temp) : _npart(npart), _x(npart), _v(npart), _xm(npart), _temp(temp), _dt(dt)
     {
         _sumv2 = 0;
-        Lattice<20> lat(delta_x);
+        Lattice<N> lat(delta_x);
         for(int i = 0; i < _npart; i++)
         {
             _x[i] = lat.lat_pos();
@@ -208,13 +211,50 @@ protected:
     double _temp;
     double _etot;
 };
-//void integrate();
-//void sample();
 
+class Sample
+//output template
+//step x y z vx vy vz t
+{
+public:    
+    Sample(string OUTPATH, int npart, double dt): OUTPATH_(OUTPATH), npart_(npart), dt_(dt)
+    {
+        out.open(OUTPATH_);
+        out << "step,x,y,z,vx,vy,vz,t\n";
+    }
+    void write_to_file(vector<array<double, 3>>* x, vector<array<double, 3>>* v, int iter)
+    {
+        if (out.is_open())
+        {
+            for (int j = 0; j < npart_; j++){
+                out << iter << ',';
+                for (int i = 0; i < 3; i++)
+                {
+                    out <<  x->at(i)[j] << ',';
+                }
+                for (int i = 0; i < 3; i++)
+                {
+                    out <<  v->at(i)[j] << ',';
+                }
+                out << iter*dt_ << '\n';
+            }
+        }
+    }
+
+    ~Sample()
+    {
+        out.close();
+    }
+protected:
+    string OUTPATH_;
+    ofstream out;
+    int npart_;
+    double dt_;    
+};
 
 
 int main()
-{   
+{   /*
     int npart = 10;
     double dt = 0.01;
     double dx = 1;
@@ -241,8 +281,9 @@ int main()
         cout << x->at(i)[0] << " " << x->at(i)[1] << " " << x->at(i)[2] << "\n";
     }
     cout << "\n\n\n";
-
-    
+    Sample sample("data.csv", npart, dt);
+    sample.write_to_file(init.get_x(), init.get_v(), 1);
+    */
     /*
     double t = 0;
     double t_max = 1;
@@ -255,5 +296,25 @@ int main()
         sample();
     }
     */
+
+    //parameters of simulation
+    int npart = 5;
+    double dt = 0.1;
+    double dx = 1;
+    const int N = 20; //grid size NxNxN 
+
+    //initialization of classes
+    Init<N> init(npart, dx, dt, 2);
+    Force force(npart, dx, 8*dx);
+    Integrate_Verle verle(npart, dt);
+    Sample sample("data.csv", npart, dt);
+
+    //main loop 
+    for(int step = 0; step < 100; step++)
+    {
+        force.calculate_f(init.get_x());
+        verle.integrate(force.get_f(), init.get_x(), init.get_xm(), force.get_en());
+        sample.write_to_file(init.get_x(), init.get_v(), step);
+    } 
     return 0;
 }
