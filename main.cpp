@@ -62,13 +62,16 @@ class Init
 {
 public:
 
-    Init(int npart, double delta_x, double dt, double temp) : _npart(npart), _x(npart), _v(npart), _xm(npart), _temp(temp), _dt(dt)
+    Init(int npart, double delta_x, double dt, double temp) :_npart(npart), _x(npart), _xm(npart), _v(npart), _temp(temp), _dt(dt)
     {
+        _sumv = {0, 0, 0};
         _sumv2 = 0;
         Lattice<N> lat(delta_x);
         for(int i = 0; i < _npart; i++)
         {
             _x[i] = lat.lat_pos();
+            //array<double, 3> pos{(i%N)*delta_x, ((i%(N*N))/N)*delta_x, (i/(N*N))*delta_x};
+            //_x[i] = pos;
             array<double, 3> vel = get_random_v(-1, 1);
             for (int j = 0; j < 3; j++)
             {
@@ -111,7 +114,7 @@ public:
     } 
 
 protected:     
-    array<double, 3> _sumv{};
+    array<double, 3> _sumv;
     double _sumv2;
     const int _npart;
     vector<array<double, 3>> _x;
@@ -125,7 +128,7 @@ protected:
 class Force
 {
 public:
-    Force(int npart, double delta_x, double rc): _npart(npart), _rc(rc), _f(npart), _box(npart*delta_x) 
+    Force(int npart, double box, double rc): _npart(npart), _rc(rc), _f(npart), _box(box) 
     {
         _rc2 = rc*rc;
         _en = 0;
@@ -179,7 +182,7 @@ protected:
 
 class Integrate_Verle{
 public:
-    Integrate_Verle(int npart, double dt): _sumv2(0), _npart(npart), _dt(dt), _temp(0)
+    Integrate_Verle(int npart, double dt, double box): _sumv2(0), _npart(npart), _dt(dt), _temp(0), _box(box)
     {
     }
 
@@ -189,7 +192,7 @@ public:
         for (int i = 0; i < _npart; i++)
         {   
             vector<array<double, 3>> v(_npart);
-            double xx;
+            double xx;  
             for(int j = 0; j < 3; j++)
             {
                 xx = 2*(x->at(i)[j]) - xm->at(i)[j] + _dt*_dt*f->at(i)[j];
@@ -197,12 +200,23 @@ public:
                 _sumv[j] = _sumv[j] + v[i][j];
                 _sumv2 = _sumv2 + v[i][j]*v[i][j];
                 xm->at(i)[j] = x->at(i)[j];
-                x->at(i)[j] = xx;
+                x->at(i)[j] = xx - floor(xx/_box)*_box;
             }    
         }
         _temp = _sumv2/(3*_npart);
         _etot = (en + 0.5*_sumv2)/_npart;
     }
+
+    double get_etot()
+    {
+        return _etot;
+    }
+
+    double get_temp()
+    {
+        return _temp;
+    }
+
 protected:
     array<double, 3> _sumv{};
     double _sumv2;
@@ -210,6 +224,7 @@ protected:
     double _dt;
     double _temp;
     double _etot;
+    double _box;
 };
 
 class Sample
@@ -220,9 +235,9 @@ public:
     Sample(string OUTPATH, int npart, double dt): OUTPATH_(OUTPATH), npart_(npart), dt_(dt)
     {
         out.open(OUTPATH_);
-        out << "step,x,y,z,vx,vy,vz,t\n";
+        out << "step,x,y,z,vx,vy,vz,etot,temp,t\n";
     }
-    void write_to_file(vector<array<double, 3>>* x, vector<array<double, 3>>* v, int iter)
+    void write_to_file(vector<array<double, 3>>* x, vector<array<double, 3>>* v, double etot, double temp,int iter)
     {
         if (out.is_open())
         {
@@ -236,6 +251,8 @@ public:
                 {
                     out <<  v->at(i)[j] << ',';
                 }
+                out << etot << ',';
+                out << temp << ',';
                 out << iter*dt_ << '\n';
             }
         }
@@ -254,67 +271,25 @@ protected:
 
 
 int main()
-{   /*
-    int npart = 10;
-    double dt = 0.01;
-    double dx = 1;
-    Init init(npart, dx, dt, 2);
-    for (int i = 0; i < npart; i++)
-    {
-        vector<array<double, 3>>* x = init.get_x();
-        cout << x->at(i)[0] << " " << x->at(i)[1] << " " << x->at(i)[2] << "\n";
-    }
-    cout << "\n\n\n";
-    Force force(npart, dx, 6*dx);
-    force.calculate_f(init.get_x());
-    for (int i = 0; i < npart; i++)
-    {
-        vector<array<double, 3>>* f = force.get_f();
-        cout << f->at(i)[0] << " " << f->at(i)[1] << " " << f->at(i)[2] << "\n";
-    }
-    cout << "\n\n\n";
-    Integrate_Verle verle(npart, dt);
-    verle.integrate(force.get_f(), init.get_x(), init.get_xm(), force.get_en());
-    for (int i = 0; i < npart; i++)
-    {
-        vector<array<double, 3>>* x = init.get_x();
-        cout << x->at(i)[0] << " " << x->at(i)[1] << " " << x->at(i)[2] << "\n";
-    }
-    cout << "\n\n\n";
-    Sample sample("data.csv", npart, dt);
-    sample.write_to_file(init.get_x(), init.get_v(), 1);
-    */
-    /*
-    double t = 0;
-    double t_max = 1;
-    double delt = 0.1;
-    while(t < t_max)
-    {
-        force(f, en);
-        integrate(f, en);
-        t = t+delt;
-        sample();
-    }
-    */
-
+{
     //parameters of simulation
-    int npart = 5;
-    double dt = 0.1;
-    double dx = 1;
-    const int N = 20; //grid size NxNxN 
+    int npart = 100;
+    double dt = 0.001;
+    double dx = 2;
+    const int N = 200; //grid size NxNxN 
 
     //initialization of classes
-    Init<N> init(npart, dx, dt, 2);
-    Force force(npart, dx, 8*dx);
-    Integrate_Verle verle(npart, dt);
+    Init<300> init(npart, dx, dt, 2);
+    Force force(npart, dx*N, 100*dx);
+    Integrate_Verle verle(npart, dt, N*dx);
     Sample sample("data.csv", npart, dt);
 
     //main loop 
-    for(int step = 0; step < 100; step++)
+    for(int step = 0; step < 5000; step++)
     {
         force.calculate_f(init.get_x());
         verle.integrate(force.get_f(), init.get_x(), init.get_xm(), force.get_en());
-        sample.write_to_file(init.get_x(), init.get_v(), step);
+        sample.write_to_file(init.get_x(), init.get_v(), verle.get_etot(), verle.get_temp(),step);
     } 
     return 0;
 }
