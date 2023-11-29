@@ -24,36 +24,36 @@ template<int N>
 class Lattice
 {
 public:
-    Lattice(double m_delta_x): _delta_x(m_delta_x)
-    {    
-    }
+Lattice(double m_delta_x): _lat(N, vector<vector<bool>>(N, vector<bool>(N))), _delta_x(m_delta_x)
+{
+}
 
-    array<double, 3> lat_pos()
-    {   
-        default_random_engine e1(42);
-        std::uniform_int_distribution<int> uniform_dist(0, N-1);
-        int x = uniform_dist(e1);
-        int y = uniform_dist(e1);
-        int z = uniform_dist(e1);
-        while (_lat[x][y][z]!=0)
-        {
-            x = uniform_dist(e1);
-            y = uniform_dist(e1);
-            z = uniform_dist(e1);
-        }
-        _lat[x][y][z] = 1;
-        array<double, 3> coordinates{x*_delta_x, y*_delta_x, z*_delta_x};
-        return coordinates;
-    }
+array<double, 3> lat_pos()
+{
+default_random_engine e1(42);
+std::uniform_int_distribution<int> uniform_dist(0, N-1);
+int x = uniform_dist(e1);
+int y = uniform_dist(e1);
+int z = uniform_dist(e1);
+while (_lat[x][y][z]!=0)
+{
+x = uniform_dist(e1);
+y = uniform_dist(e1);
+z = uniform_dist(e1);
+}
+_lat[x][y][z] = 1;
+array<double, 3> coordinates{x*_delta_x, y*_delta_x, z*_delta_x};
+return coordinates;
+}
 
-    bool get_lat(int i, int j, int k) const
-    {
-        return _lat[i][j][k];
-    }
+bool get_lat(int i, int j, int k) const
+{
+return _lat[i][j][k];
+}
 
 protected:
-    array<array<array<bool, N>, N>, N> _lat{};
-    double _delta_x;
+vector<vector<vector<bool>>> _lat;
+double _delta_x;
 };
 
 
@@ -128,7 +128,7 @@ protected:
 class Force
 {
 public:
-    Force(int npart, double box, double rc): _npart(npart), _rc(rc), _f(npart), _box(box) 
+    Force(int npart, double box, double rc): _npart(npart), _rc(rc), _f(npart, {0, 0, 0}), _box(box) 
     {
         _rc2 = rc*rc;
         _en = 0;
@@ -156,8 +156,8 @@ public:
                     {
                         _f[i][k] = _f[i][k] + ff*xr[k];
                         _f[j][k] = _f[j][k] - ff*xr[k];
-                        _en = _en + 4*r6i*(r6i - 1) - _ecut;
                     } 
+                    _en = _en + 4*r6i*(r6i - 1) - _ecut;
                 } 
             }
         }
@@ -274,14 +274,14 @@ int main()
 {
     //parameters of simulation
     int npart = 100;
-    double dt = 0.001;
-    double dx = 2;
+    double dt = 0.1;
+    double dx = 1;
     const int N = 200; //grid size NxNxN 
 
     //initialization of classes
-    Init<300> init(npart, dx, dt, 2);
-    Force force(npart, dx*N, 100*dx);
-    Integrate_Verle verle(npart, dt, N*dx);
+    Init<N> init(npart, dx, dt, 2);
+    Force force(npart, dx * N, 100 * dx);
+    Integrate_Verle verle(npart, dt, N * dx);
     Sample sample("data.csv", npart, dt);
 
     //main loop 
